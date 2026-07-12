@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mealplanner": {
+      "command": "uv",
+      "args": ["run", "--directory", "/home/gillus/claude-toolshed/meal-planner", "mealplanner-mcp"],
+      "env": {
+        "CALLMEBOT_PHONE": "${CALLMEBOT_PHONE:-}",
+        "CALLMEBOT_APIKEY": "${CALLMEBOT_APIKEY:-}"
+      }
+    }
+  }
+}

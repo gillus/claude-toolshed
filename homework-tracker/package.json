@@ -1,0 +1,32 @@
+{
+	"name": "school-mcp",
+	"version": "0.1.0",
+	"description": "MCP server exposing Argo didUP school data (homework, grades, lesson topics, notices) to Claude",
+	"type": "module",
+	"main": "dist/index.js",
+	"bin": {
+		"school-mcp": "dist/index.js"
+	},
+	"scripts": {
+		"setup": "npm install --ignore-scripts && npm run setup:argo && npm run build",
+		"setup:argo": "cd node_modules/portaleargo-api && npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps && (npm run build || true) && test -f dist/index.js && test -f dist/types/apiTypes.d.ts",
+		"build": "tsc",
+		"dev": "tsx src/index.ts",
+		"start": "node dist/index.js",
+		"check-login": "tsx src/checkLogin.ts"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"license": "MIT",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.12.0",
+		"portaleargo-api": "github:DTrombett/portaleargo-api",
+		"zod": "^3.24.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.0",
+		"tsx": "^4.19.0",
+		"typescript": "^5.8.0"
+	}
+}

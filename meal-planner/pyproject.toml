@@ -1,0 +1,27 @@
+[project]
+name = "mealplanner-mcp"
+version = "0.1.0"
+description = "MCP server for family meal planning: preferences, recipe search, meal plans, shopping lists, WhatsApp."
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "ddgs>=9.0.0",
+    "recipe-scrapers>=15.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+mealplanner-mcp = "mealplanner.server:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mealplanner"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
