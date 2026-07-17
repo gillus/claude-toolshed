@@ -157,6 +157,87 @@ def test_no_websites_returns_note(conn):
     assert "No websites" in out["notes"][0]
 
 
+def test_favorite_recipes_browse_and_filter(seeded):
+    conn = seeded
+    dal = store.upsert_recipe(
+        conn,
+        {"url": "https://old.com/dal", "title": "Red Lentil Dal",
+         "ingredients": ["red lentils", "coconut milk"], "servings": 4},
+    )
+    store.record_feedback(conn, dal["id"], "liked")
+    soup = store.upsert_recipe(
+        conn,
+        {"url": "https://old.com/soup", "title": "Chicken Soup",
+         "ingredients": ["chicken", "carrots"], "servings": 4},
+    )
+    store.record_feedback(conn, soup["id"], "liked")
+    # liked then disliked -> out of the favorites pool
+    store.record_feedback(conn, soup["id"], "disliked")
+
+    all_favs = search.favorite_recipes(conn)
+    assert [r["title"] for r in all_favs] == ["Red Lentil Dal"]
+    assert search.favorite_recipes(conn, "lentil curry")[0]["url"] == "https://old.com/dal"
+    assert search.favorite_recipes(conn, "pumpkin") == []
+
+    vegan = store.get_member(conn, "B")
+    dal_milk = store.upsert_recipe(
+        conn,
+        {"url": "https://old.com/milky", "title": "Milky Mash",
+         "ingredients": ["potatoes", "milk"], "servings": 4},
+    )
+    store.record_feedback(conn, dal_milk["id"], "liked")
+    favs = search.favorite_recipes(conn, members=[vegan])
+    milky = next(r for r in favs if r["title"] == "Milky Mash")
+    assert milky["constraint_violations"][0]["member"] == "B"
+
+
+def test_search_includes_matching_favorites_without_fetching(monkeypatch, seeded):
+    conn = seeded
+    dal = store.upsert_recipe(
+        conn,
+        {"url": "https://old.com/dal", "title": "Red Lentil Dal",
+         "ingredients": ["red lentils", "coconut milk"], "servings": 4},
+    )
+    store.record_feedback(conn, dal["id"], "liked")
+
+    fake_ddg(
+        monkeypatch,
+        {
+            "lentil": [
+                {"href": "https://alpha.com/chicken-soup"},
+                {"href": "https://alpha.com/lentil-curry"},
+            ]
+        },
+    )
+    out = search.search_recipes(conn, "lentil dinner", [], fetcher=fetcher)
+    by_url = {r["url"]: r for r in out["results"]}
+    # the favorite is included from the DB (old.com is not even in the pool)
+    assert by_url["https://old.com/dal"]["favorite"] is True
+    assert by_url["https://alpha.com/lentil-curry"]["favorite"] is False
+    assert any("favorite" in n for n in out["notes"])
+    # favorites outrank everything absent violations: liked-pool similarity + rank 0
+    assert out["results"][0]["url"] == "https://old.com/dal"
+
+
+def test_search_dedups_favorite_url_from_web_candidates(monkeypatch, seeded):
+    conn = seeded
+    curry = store.upsert_recipe(
+        conn,
+        {"url": "https://alpha.com/lentil-curry", "title": "Lentil Curry",
+         "ingredients": ["red lentils", "coconut milk"], "servings": 4},
+    )
+    store.record_feedback(conn, curry["id"], "liked")
+
+    fake_ddg(monkeypatch, {"lentil": [{"href": "https://alpha.com/lentil-curry"}]})
+
+    def exploding_fetcher(url):
+        raise AssertionError("favorite must not be fetched")
+
+    out = search.search_recipes(conn, "lentil", [], fetcher=exploding_fetcher)
+    assert [r["url"] for r in out["results"]] == ["https://alpha.com/lentil-curry"]
+    assert out["results"][0]["favorite"] is True
+
+
 def test_cached_recipe_skips_fetch(monkeypatch, seeded):
     conn = seeded
     store.upsert_recipe(

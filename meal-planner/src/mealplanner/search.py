@@ -92,6 +92,48 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
+def _query_tokens(query: str) -> set[str]:
+    return {
+        t for t in re.findall(r"[a-z]+", query.lower())
+        if len(t) > 2 and t not in STOPWORDS
+    }
+
+
+def favorite_recipes(
+    conn: sqlite3.Connection,
+    query: str = "",
+    members: list[dict] | None = None,
+) -> list[dict]:
+    """Liked recipes (excluding any later disliked), optionally filtered to
+    those sharing a keyword with `query` and constraint-checked for members.
+    Sorted by query similarity when a query is given."""
+    qtokens = _query_tokens(query)
+    disliked_urls = store.feedback_urls(conn, "disliked")
+    out = []
+    for r in store.feedback_recipes(conn, "liked"):
+        if r["url"] in disliked_urls:
+            continue
+        tokens = tokenize(r)
+        if qtokens and not tokens & qtokens:
+            continue
+        out.append(
+            {
+                "url": r["url"],
+                "title": r["title"],
+                "site": r["site"],
+                "servings": r["servings"],
+                "total_time_min": r["total_time_min"],
+                "ingredients": r["ingredients"],
+                "constraint_violations": constraints.check_recipe(
+                    r["ingredients"], members or []
+                ),
+                "query_match": round(_jaccard(tokens, qtokens), 3) if qtokens else None,
+            }
+        )
+    out.sort(key=lambda r: r["query_match"] or 0.0, reverse=True)
+    return out
+
+
 def score_recipe(
     recipe: dict,
     search_rank: int,
@@ -139,13 +181,34 @@ def search_recipes(
     for r in store.feedback_recipes(conn, "disliked"):
         disliked_tokens |= tokenize(r)
 
+    # Liked recipes matching the query join the candidate pool straight from
+    # the local DB — no fetch, no max_fetch slot used.
+    favorites = favorite_recipes(conn, query, members) if _query_tokens(query) else []
+    if favorites:
+        notes.append(f"included {len(favorites)} liked favorite(s) matching the query")
+    fav_urls = {f["url"] for f in favorites}
+
     candidates = ddg_search(query, domains, notes)
     dropped = [u for u in candidates if u in disliked_urls]
     if dropped:
         notes.append(f"excluded {len(dropped)} previously disliked recipe(s)")
-    candidates = [u for u in candidates if u not in disliked_urls][:max_fetch]
+    candidates = [
+        u for u in candidates if u not in disliked_urls and u not in fav_urls
+    ][:max_fetch]
 
     scored = []
+    for fav in favorites:
+        entry = dict(fav)
+        entry.pop("query_match", None)
+        entry["favorite"] = True
+        entry["score"] = round(
+            score_recipe(
+                entry, 0, liked_tokens, disliked_tokens,
+                bool(entry["constraint_violations"]),
+            ),
+            2,
+        )
+        scored.append(entry)
     for rank, url in enumerate(candidates):
         recipe = store.get_recipe_by_url(conn, url, max_age_days=CACHE_MAX_AGE_DAYS)
         if recipe is None:
@@ -172,6 +235,7 @@ def search_recipes(
                 "total_time_min": recipe["total_time_min"],
                 "ingredients": recipe["ingredients"],
                 "constraint_violations": violations,
+                "favorite": False,
                 "score": round(score, 2),
             }
         )

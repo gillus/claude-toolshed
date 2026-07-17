@@ -35,6 +35,8 @@ npm run check-login    # verifies each account logs in and prints a data summary
 
 Credentials are the **native Argo didUP Famiglia** ones (school code + username + password). SPID-only accounts are not supported by the underlying login automation.
 
+**One parent account, several children:** put the same credentials in each student's block and set `ARGO_<NAME>_STUDENT_NAME` to a substring of each child's full name as registered in Argo (case-insensitive). Argo exposes every child as a separate profile on the account; without the name filter the server would bind every student to the first profile. If you omit it on a multi-child account, startup fails with a message listing the children's names to copy from. After changing the mapping, delete `.argo-data/` so stale per-student caches are rebuilt.
+
 ## Claude Desktop configuration
 
 Add to `claude_desktop_config.json` (Settings → Developer → Edit Config):
@@ -56,4 +58,5 @@ Credentials are read from `.env` in the project root, so nothing sensitive goes 
 
 - **Caching**: the full Argo dashboard is fetched on first use and re-synced incrementally at most every `ARGO_SYNC_TTL_MINUTES` (default 10). Session tokens and data are persisted under `.argo-data/` (gitignored) so restarts don't re-authenticate from scratch.
 - **Privacy**: everything runs locally; credentials never leave your machine except toward `portaleargo.it`. Only the data Claude explicitly requests through a tool call enters the conversation.
+- **Name redaction**: set `ARGO_REDACT_NAMES=true` to replace student and teacher names with initials ("Rossi Maria" → "R.M.") in all tool output, and drop teacher emails. Name fields are always reduced to initials; free text (homework, teacher comments, notices) is scrubbed against every name the register exposes — names the server has never seen (e.g. a classmate mentioned in a note) can slip through, and attachment downloads are not scrubbed at all. For full effect also use neutral identifiers in `ARGO_STUDENTS` (e.g. `kid1`), since those appear verbatim as the `student` parameter.
 - **Unofficial API**: Argo may change its API at any time. If things break, check for updates to `portaleargo-api` first.

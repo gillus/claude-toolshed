@@ -14,6 +14,9 @@ A personal MCP server for family meal planning, designed to be driven by Claude
   flagged (member + offending ingredient) and ranked last.
 - **Taste learning** — record liked/disliked recipes; disliked URLs are never
   suggested again, and results similar to liked recipes are boosted.
+- **Favorites cookbook** — liked recipes live in the local DB and can be
+  browsed with `list_liked_recipes`; searches automatically mix in favorites
+  that match the query (flagged `favorite: true`, no fetch needed).
 - **Meal plans** — N-day plans from a grid of slots (`Monday lunch [A]`,
   `Monday dinner [A,B,C]`…), with recipes assigned per slot.
 - **Shopping lists** — ingredients scaled by attendees vs recipe servings,

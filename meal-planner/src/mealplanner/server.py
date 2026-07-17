@@ -96,11 +96,12 @@ def search_recipes(query: str, attendees: list[str] = [], max_results: int = 6) 
     Pass attendees (family member names) so their hard constraints are checked:
     recipes violating a constraint are NOT dropped but flagged in
     constraint_violations (member, constraint, matching ingredient) and ranked
-    last — present them only if you mention the conflict. Ranking is also
-    boosted by similarity to previously liked recipes; previously disliked
-    recipe URLs are excluded entirely. Check 'skipped' and 'notes' for pages
-    that failed to parse or search problems. Takes ~10-30s as pages are
-    fetched and parsed live.
+    last — present them only if you mention the conflict. Previously liked
+    recipes matching the query are included automatically from the local DB
+    (favorite: true) and ranking of web results is boosted by similarity to
+    liked recipes; previously disliked recipe URLs are excluded entirely.
+    Check 'skipped' and 'notes' for pages that failed to parse or search
+    problems. Takes ~10-30s as pages are fetched and parsed live.
     """
     return search.search_recipes(
         conn(), query, attendees, max_results=max_results, max_fetch=settings.max_fetch
@@ -142,6 +143,19 @@ def record_recipe_feedback(
     store.record_feedback(c, recipe["id"], verdict, member_id, notes)
     return {"recorded": True, "recipe": recipe["title"], "verdict": verdict,
             "member": member or "whole family"}
+
+
+@mcp.tool()
+def list_liked_recipes(query: str = "", attendees: list[str] = []) -> dict:
+    """Browse the family's liked recipes stored in the local DB (their
+    'cookbook' of known-good favorites). Optional query filters by keyword
+    ('lentils', 'potato gratin'); pass attendees to get constraint_violations
+    against their hard constraints. search_recipes already mixes matching
+    favorites into its results, so use this to browse favorites directly or
+    to plan a meal purely from recipes the family already loves."""
+    members = [store.get_member(conn(), n) for n in attendees]
+    favorites = search.favorite_recipes(conn(), query, members)
+    return {"favorites": favorites, "count": len(favorites)}
 
 
 @mcp.tool()

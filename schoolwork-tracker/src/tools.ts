@@ -65,7 +65,7 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 					const { alunno, scheda, anno } = s.profile;
 					return {
 						student: name,
-						full_name: alunno.nominativo,
+						full_name: s.redactor.nameField(alunno.nominativo),
 						class: `${scheda.classe.desDenominazione} ${scheda.classe.desSezione}`,
 						course: scheda.corso.descrizione,
 						school: scheda.scuola.descrizione,
@@ -96,6 +96,7 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 		},
 		async ({ student: name, due_from, due_to, subject }) => {
 			const s = await sessions.get(name);
+			const r = s.redactor;
 			const from = due_from ?? toIsoDay(new Date());
 			const to = due_to ?? toIsoDay(new Date(Date.now() + 14 * DAY));
 			const homework = s.dashboard.registro
@@ -104,9 +105,9 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 					entry.compiti.map((c) => ({
 						due_date: isoDay(c.dataConsegna),
 						subject: entry.materia,
-						assignment: c.compito,
+						assignment: r.text(c.compito),
 						assigned_on: isoDay(entry.datGiorno),
-						teacher: entry.docente,
+						teacher: r.nameField(entry.docente),
 					})),
 				)
 				.filter((h) => inRange(h.due_date, from, to))
@@ -131,14 +132,15 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 		},
 		async ({ student: name, from, to, subject }) => {
 			const s = await sessions.get(name);
+			const r = s.redactor;
 			const fromDay = from ?? toIsoDay(new Date(Date.now() - 30 * DAY));
 			const topics = s.dashboard.registro
 				.map((entry) => ({
 					date: isoDay(entry.datGiorno),
 					hour: entry.ora,
 					subject: entry.materia,
-					teacher: entry.docente,
-					topic: entry.attivita,
+					teacher: r.nameField(entry.docente),
+					topic: r.text(entry.attivita),
 				}))
 				.filter(
 					(t) =>
@@ -166,6 +168,7 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 		},
 		async ({ student: name, from, subject, limit }) => {
 			const s = await sessions.get(name);
+			const r = s.redactor;
 			const grades = s.dashboard.voti
 				.map((v) => ({
 					date: isoDay(v.datGiorno),
@@ -173,9 +176,9 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 					grade: v.codCodice,
 					value: v.valore,
 					type: GRADE_TYPES[v.codTipo] ?? v.codTipo,
-					test_description: v.descrizioneProva || null,
-					teacher_comment: v.desCommento || null,
-					teacher: v.docente,
+					test_description: r.text(v.descrizioneProva),
+					teacher_comment: r.text(v.desCommento),
+					teacher: r.nameField(v.docente),
 					counts_toward_average: v.numMedia > 0,
 				}))
 				.filter(
@@ -234,19 +237,20 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 		},
 		async ({ student: name, action_required_only, from, limit }) => {
 			const s = await sessions.get(name);
+			const r = s.redactor;
 			const notices = s.dashboard.bacheca
 				.map((n) => ({
 					date: isoDay(n.data),
 					category: n.categoria,
-					author: n.autore,
-					message: n.messaggio,
+					author: r.text(n.autore),
+					message: r.text(n.messaggio),
 					url: n.url,
 					expires: isoDay(n.dataScadenza),
 					needs_acknowledgement: n.pvRichiesta && !n.isPresaVisione,
 					needs_consent: n.adRichiesta && !n.isPresaAdesioneConfermata,
 					consent_deadline: isoDay(n.dataScadAdesione),
 					attachments: n.listaAllegati?.map((a) => ({
-						file: a.nomeFile,
+						file: r.text(a.nomeFile),
 						uid: a.pk,
 					})),
 				}))
@@ -275,16 +279,17 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 		},
 		async ({ student: name, pending_only }) => {
 			const s = await sessions.get(name);
+			const r = s.redactor;
 			const events = s.dashboard.appello
 				.map((e) => ({
 					date: isoDay(e.data),
 					type: e.descrizione,
 					code: e.codEvento,
-					teacher: e.docente,
-					note: e.nota || null,
+					teacher: r.nameField(e.docente),
+					note: r.text(e.nota),
 					needs_justification: e.daGiustificare && e.giustificata !== "S",
 					justified_on: isoDay(e.dataGiustificazione),
-					justification_comment: e.commentoGiustificazione || null,
+					justification_comment: r.text(e.commentoGiustificazione),
 				}))
 				.filter((e) => !pending_only || e.needs_justification)
 				.sort((a, b) => (a.date! > b.date! ? -1 : 1));
@@ -314,7 +319,9 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 				.map((e) => ({
 					hour: e.numOra,
 					subject: e.materia,
-					teacher: e.docente || `${e.desNome} ${e.desCognome}`.trim(),
+					teacher: s.redactor.nameField(
+						e.docente || `${e.desNome} ${e.desCognome}`.trim(),
+					),
 				}))
 				.sort((a, b) => a.hour - b.hour);
 			return json({ date: toIsoDay(day), timetable });
@@ -327,10 +334,11 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 		{ student },
 		async ({ student: name }) => {
 			const s = await sessions.get(name);
+			const r = s.redactor;
 			const teachers = s.dashboard.listaDocentiClasse.map((t) => ({
-				name: `${t.desNome} ${t.desCognome}`,
+				name: r.nameField(`${t.desNome} ${t.desCognome}`),
 				subjects: t.materie,
-				email: t.desEmail || null,
+				email: r.email(t.desEmail),
 			}));
 			return json(teachers);
 		},
@@ -342,11 +350,12 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 		{ student },
 		async ({ student: name }) => {
 			const s = await sessions.get(name);
+			const r = s.redactor;
 			const reminders = s.dashboard.promemoria
 				.map((p) => ({
 					date: isoDay(p.datGiorno),
-					teacher: p.docente,
-					note: p.desAnnotazioni,
+					teacher: r.nameField(p.docente),
+					note: r.text(p.desAnnotazioni),
 					time: p.oraInizio ? `${p.oraInizio}-${p.oraFine}` : null,
 				}))
 				.sort((a, b) => (a.date! > b.date! ? -1 : 1));
@@ -362,7 +371,7 @@ export function registerTools(server: McpServer, sessions: Sessions): void {
 			const s = await sessions.get(name);
 			const { tasse, isPagOnlineAttivo } = await s.getFees();
 			const fees = tasse.map((t) => ({
-				description: t.descrizione,
+				description: s.redactor.text(t.descrizione),
 				amount: t.importoTassa,
 				due_date: isoDay(t.scadenza),
 				status: t.stato,
