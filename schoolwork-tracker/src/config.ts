@@ -38,10 +38,20 @@ export type Config = {
 	syncTtlMinutes: number;
 	/** Replace student/teacher names with initials in all tool output */
 	redactNames: boolean;
+	/** didUP app version sent as `argo-client-version`; Argo rejects stale ones */
+	clientVersion: string;
 	/** Directory where per-student Argo session data is persisted */
 	dataDir: string;
 	projectRoot: string;
 };
+
+/**
+ * didUP Famiglia app version to impersonate. portaleargo-api hardcodes one that
+ * goes stale whenever Argo forces an app update ("E' necessario scaricare
+ * l'ultima versione presente negli store."). Bump to the current store version,
+ * or override with ARGO_CLIENT_VERSION.
+ */
+const DEFAULT_CLIENT_VERSION = "1.30.2";
 
 export function loadConfig(projectRoot: string): Config {
 	const envFile = join(projectRoot, ".env");
@@ -88,6 +98,7 @@ export function loadConfig(projectRoot: string): Config {
 		redactNames: /^(1|true|yes|on)$/i.test(
 			process.env.ARGO_REDACT_NAMES ?? "",
 		),
+		clientVersion: process.env.ARGO_CLIENT_VERSION || DEFAULT_CLIENT_VERSION,
 		dataDir,
 		projectRoot,
 	};

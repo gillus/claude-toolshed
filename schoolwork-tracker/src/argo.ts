@@ -94,6 +94,7 @@ export class StudentSession {
 				username: cfg.username,
 				password: cfg.password,
 				dataPath: this.dataPath,
+				version: config.clientVersion,
 			},
 			cfg.studentName,
 		);
